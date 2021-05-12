@@ -1,13 +1,20 @@
 // 680x0 (Sixty Eight K) Interface
 #include "burnint.h"
 #include "sekdebug.h"
-
+#ifdef EMU_C68K
+ #include "c68k.c"
+#endif
 #ifdef EMU_M68K
 int nSekM68KContextSize[SEK_MAX];
 char* SekM68KContext[SEK_MAX];
 #endif
+ 
+#ifdef EMU_C68K
+c68k_struc * SekC68KCurrentContext = NULL;
+c68k_struc * SekC68KContext[SEK_MAX];
+#endif
 
-int nSekCount = -1;							// Number of allocated 68000s
+static int nSekCount = -1;							// Number of allocated 68000s
 struct SekExt *SekExt[SEK_MAX] = { NULL, }, *pSekExt = NULL;
 
 int nSekActive = -1;								// The cpu which is currently being emulated
@@ -34,6 +41,7 @@ static struct { unsigned int address; int id; } BreakpointFetch[9] = { { 0, 0 },
 #if defined (EMU_A68K)
 static void UpdateA68KContext()
 {
+/*	
 	if (M68000_regs.srh & 20) {		// Supervisor mode
 		M68000_regs.isp = M68000_regs.a[7];
 	} else {						// User mode
@@ -46,6 +54,7 @@ static void UpdateA68KContext()
 	M68000_regs.sr |= (M68000_regs.ccr >>  4) & 0x0004;	// Z
 	M68000_regs.sr |= (M68000_regs.ccr >> 10) & 0x0002;	// V
 	M68000_regs.sr |= (M68000_regs.ccr      ) & 0x0001;	// C
+*/
 }
 
 static unsigned int GetA68KSR()
@@ -268,7 +277,8 @@ inline static unsigned short ReadWord(unsigned int a)
 
 	pr = FIND_R(a);
 	if ((unsigned int)pr >= SEK_MAXHANDLER) {
-		return *((unsigned short*)(pr + (a & SEK_PAGEM)));
+		pr=(pr + (a & SEK_PAGEM));
+		return (*(pr+1))<<8|(*pr);
 	}
 	return pSekExt->ReadWord[(unsigned int)pr](a);
 }
@@ -283,7 +293,8 @@ inline static unsigned short FetchWord(unsigned int a)
 
 	pr = FIND_F(a);
 	if ((unsigned int)pr >= SEK_MAXHANDLER) {
-		return *((unsigned short*)(pr + (a & SEK_PAGEM)));
+		pr=(pr + (a & SEK_PAGEM));
+		return (*(pr+1))<<8|(*pr);
 	}
 	return pSekExt->ReadWord[(unsigned int)pr](a);
 }
@@ -298,7 +309,9 @@ inline static void WriteWord(unsigned int a, unsigned short d)
 
 	pr = FIND_W(a);
 	if ((unsigned int)pr >= SEK_MAXHANDLER) {
-		*((unsigned short*)(pr + (a & SEK_PAGEM))) = (unsigned short)d;
+		pr=pr + (a & SEK_PAGEM);
+		pr[0]=d;
+		pr[1]=d>>8;
 		return;
 	}
 	pSekExt->WriteWord[(unsigned int)pr](a, d);
@@ -312,7 +325,9 @@ inline static void WriteWordROM(unsigned int a, unsigned short d)
 
 	pr = FIND_R(a);
 	if ((unsigned int)pr >= SEK_MAXHANDLER) {
-		*((unsigned short*)(pr + (a & SEK_PAGEM))) = (unsigned short)d;
+		pr=pr + (a & SEK_PAGEM);
+		pr[0]=d;
+		pr[1]=d>>8;
 		return;
 	}
 	pSekExt->WriteWord[(unsigned int)pr](a, d);
@@ -328,9 +343,8 @@ inline static unsigned int ReadLong(unsigned int a)
 
 	pr = FIND_R(a);
 	if ((unsigned int)pr >= SEK_MAXHANDLER) {
-		unsigned int r = *((unsigned int*)(pr + (a & SEK_PAGEM)));
-		r = (r >> 16) | (r << 16);
-		return r;
+		pr=pr + (a & SEK_PAGEM);
+		return pr[1]<<24|pr[0]<<16|pr[3]<<8|pr[2];
 	}
 	return pSekExt->ReadLong[(unsigned int)pr](a);
 }
@@ -345,9 +359,8 @@ inline static unsigned int FetchLong(unsigned int a)
 
 	pr = FIND_F(a);
 	if ((unsigned int)pr >= SEK_MAXHANDLER) {
-		unsigned int r = *((unsigned int*)(pr + (a & SEK_PAGEM)));
-		r = (r >> 16) | (r << 16);
-		return r;
+		pr=pr + (a & SEK_PAGEM);
+		return  pr[1]<<24|pr[0]<<16|pr[3]<<8|pr[2];
 	}
 	return pSekExt->ReadLong[(unsigned int)pr](a);
 }
@@ -362,8 +375,11 @@ inline static void WriteLong(unsigned int a, unsigned int d)
 
 	pr = FIND_W(a);
 	if ((unsigned int)pr >= SEK_MAXHANDLER) {
-		d = (d >> 16) | (d << 16);
-		*((unsigned int*)(pr + (a & SEK_PAGEM))) = d;
+		pr=pr + (a & SEK_PAGEM);
+		pr[2] = (unsigned char)d;
+		pr[3] = (unsigned char)(d>>8);
+		pr[0] = (unsigned char)(d>>16);
+		pr[1] = (unsigned char)(d>>24);
 		return;
 	}
 	pSekExt->WriteLong[(unsigned int)pr](a, d);
@@ -377,8 +393,11 @@ inline static void WriteLongROM(unsigned int a, unsigned int d)
 
 	pr = FIND_R(a);
 	if ((unsigned int)pr >= SEK_MAXHANDLER) {
-		d = (d >> 16) | (d << 16);
-		*((unsigned int*)(pr + (a & SEK_PAGEM))) = d;
+		pr=pr + (a & SEK_PAGEM);
+		pr[2] = (unsigned char)d;
+		pr[3] = (unsigned char)(d>>8);
+		pr[0] = (unsigned char)(d>>16);
+		pr[1] = (unsigned char)(d>>24);
 		return;
 	}
 	pSekExt->WriteLong[(unsigned int)pr](a, d);
@@ -523,7 +542,7 @@ extern "C" {
  unsigned char* OP_RAM = NULL;
 
 #ifndef EMU_M68K
- int m68k_ICount = 0;
+ int m68k_ICount = 0; 
 #endif
 
  unsigned int mem_amask = 0xFFFFFF;			// 24-bit bus
@@ -531,8 +550,10 @@ extern "C" {
 
  unsigned int mame_debug = 0, cur_mrhard = 0, m68k_illegal_opcode = 0, illegal_op = 0, illegal_pc = 0, opcode_entry = 0;
 
- struct A68KInter a68k_memory_intf;
+ //struct A68KInter a68k_memory_intf;
 }
+
+extern "C" struct A68KInter a68k_memory_intf;
 
 unsigned char  __fastcall A68KRead8 (unsigned int a) { return ReadByte(a);}
 unsigned short __fastcall A68KRead16(unsigned int a) { return ReadWord(a);}
@@ -558,7 +579,7 @@ void __fastcall A68KChangePC(unsigned int pc)
 	OP_ROM = FIND_F(pc) - (pc & ~SEK_PAGEM);
 
 	// Set the current bank number
-	M68000_regs.nAsmBank = pc >> SEK_BITS;
+	//M68000_regs.nAsmBank = pc >> SEK_BITS;
 }
 #endif
 
@@ -599,6 +620,49 @@ void __fastcall M68KWriteLong(unsigned int a, unsigned int d) { WriteLong(a, d);
 }
 #endif
 
+#ifdef EMU_C68K
+extern "C" {
+unsigned char C68KReadByte(unsigned int a) { return ReadByte(a); }
+unsigned short C68KReadWord(unsigned int a) { return ReadWord(a); }
+unsigned char C68KFetchByte(unsigned int a) { return FetchByte(a); }
+unsigned short C68KFetchWord(unsigned int a) { return FetchWord(a); }
+void C68KWriteByte(unsigned int a, unsigned char d) { WriteByte(a, d); }
+void C68KWriteWord(unsigned int a, unsigned short d) { WriteWord(a, d); }
+
+unsigned int C68KRebasePC(unsigned int pc) {
+//	bprintf(PRINT_NORMAL, _T("C68KRebasePC 0x%08x\n"), pc);
+	pc &= 0xFFFFFF;
+	SekC68KCurrentContext->BasePC = (unsigned int)FIND_F(pc) - (pc & ~SEK_PAGEM);
+	return SekC68KCurrentContext->BasePC + pc;
+}
+
+int C68KInterruptCallBack(int irqline)
+{
+	if (nSekIRQPending[nSekActive] & SEK_IRQSTATUS_AUTO) {
+		SekC68KContext[nSekActive]->IRQState = 0;	//CLEAR_LINE
+		SekC68KContext[nSekActive]->IRQLine = 0;
+	}
+	
+	nSekIRQPending[nSekActive] = 0;
+	
+	if (pSekExt->IrqCallback) {
+		return pSekExt->IrqCallback(irqline);
+	}
+
+	return C68K_INTERRUPT_AUTOVECTOR_EX + irqline;
+}
+
+void C68KResetCallBack()
+{
+	if ( pSekExt->ResetCallback )
+		pSekExt->ResetCallback();
+}
+
+}
+#endif
+
+#ifdef EMU_A68K
+
 struct A68KInter a68k_inter_normal = {
 	NULL,
 	A68KRead8,
@@ -632,6 +696,8 @@ struct A68KInter a68k_inter_breakpoint = {
 	A68KRead16,	// unused
 	A68KRead32,	// unused
 };
+
+#endif
 
 #endif
 
@@ -682,6 +748,7 @@ static int A68KResetCallback()
 	return pSekExt->ResetCallback();
 }
 
+/*
 static int A68KRTECallback()
 {
 	if (pSekExt->RTECallback == NULL) {
@@ -697,13 +764,14 @@ static int A68KCmpCallback(unsigned int val, int reg)
 	}
 	return pSekExt->CmpCallback(val, reg);
 }
+*/
 
 static int SekSetup(struct A68KContext* psr)
 {
 	psr->IrqCallback = A68KIRQAcknowledge;
 	psr->ResetCallback = A68KResetCallback;
-	psr->RTECallback = A68KRTECallback;
-	psr->CmpCallback = A68KCmpCallback;
+	//psr->RTECallback = A68KRTECallback;
+	//psr->CmpCallback = A68KCmpCallback;
 
 	return 0;
 }
@@ -808,6 +876,35 @@ static int SekInitCPUM68K(int nCount, int nCPUType)
 	return 0;
 }
 #endif
+
+#ifdef EMU_C68K
+static int SekInitCPUC68K(int nCount, int nCPUType)
+{
+	if (nCPUType != 0x68000) return 1;
+	nSekCPUType[nCount] = 0;
+
+	SekC68KContext[nCount] = (c68k_struc *)malloc( sizeof( c68k_struc ) );
+	if (SekC68KContext[nCount] == NULL)	return 1;
+
+	memset(SekC68KContext[nCount], 0, sizeof( c68k_struc ));
+	SekC68KCurrentContext = SekC68KContext[nCount];
+
+	SekC68KCurrentContext->Rebase_PC = C68KRebasePC;
+	
+	SekC68KCurrentContext->Read_Byte = C68KReadByte;
+	SekC68KCurrentContext->Read_Word = C68KReadWord;
+	SekC68KCurrentContext->Read_Byte_PC_Relative = C68KFetchByte;
+	SekC68KCurrentContext->Read_Word_PC_Relative = C68KFetchWord;
+	SekC68KCurrentContext->Write_Byte = C68KWriteByte;
+	SekC68KCurrentContext->Write_Word = C68KWriteWord;
+	
+	SekC68KCurrentContext->Interrupt_CallBack = C68KInterruptCallBack;
+	SekC68KCurrentContext->Reset_CallBack = C68KResetCallBack;
+	
+	return 0;
+}
+#endif
+
 
 void SekNewFrame()
 {
@@ -918,6 +1015,16 @@ int SekInit(int nCount, int nCPUType)
 	// Map the normal memory handlers
 	SekDbgDisableBreakpoints();
 
+#ifdef EMU_C68K
+
+	if ( SekInitCPUC68K(nCount, nCPUType) ) {
+		SekExit();
+		return 1;
+	}
+	C68k_Init( SekC68KCurrentContext );
+
+#endif
+
 #ifdef EMU_A68K
 	if (bBurnUseASMCPUEmulation && nCPUType == 0x68000) {
 		if (SekInitCPUA68K(nCount, nCPUType)) {
@@ -964,6 +1071,14 @@ static void SekCPUExitM68K(int i)
 }
 #endif
 
+#ifdef EMU_C68K
+static void SekCPUExitC68K(int i)
+{
+		free(SekC68KContext[i]);
+		SekC68KContext[i] = NULL;
+}
+#endif
+
 int SekExit()
 {
 	// Deallocate cpu extenal data (memory map etc)
@@ -977,11 +1092,17 @@ int SekExit()
 		SekCPUExitM68K(i);
 #endif
 
+#ifdef EMU_C68K
+		SekCPUExitC68K(i);
+#endif
+
 		// Deallocate other context data
 		free(SekExt[i]);
 		SekExt[i] = NULL;
 	}
-
+#ifdef EMU_C68K
+		C68k_Exit();
+#endif
 	pSekExt = NULL;
 
 	nSekActive = -1;
@@ -992,7 +1113,7 @@ int SekExit()
 
 void SekReset()
 {
-
+	
 #ifdef EMU_A68K
 	if (nSekCPUType[nSekActive] == 0) {
 		// A68K has no internal support for resetting the processor, so do what's needed ourselves
@@ -1011,6 +1132,11 @@ void SekReset()
 	}
 #endif
 
+#ifdef EMU_C68K
+	C68k_Reset( SekC68KCurrentContext );
+#endif
+
+
 }
 
 // ----------------------------------------------------------------------------
@@ -1023,6 +1149,10 @@ void SekOpen(const int i)
 		nSekActive = i;
 
 		pSekExt = SekExt[nSekActive];						// Point to cpu context
+
+#ifdef EMU_C68K
+		SekC68KCurrentContext = SekC68KContext[nSekActive];
+#endif		
 
 #ifdef EMU_A68K
 		if (nSekCPUType[nSekActive] == 0) {
@@ -1046,6 +1176,10 @@ void SekOpen(const int i)
 // Close the active cpu
 void SekClose()
 {
+	
+#ifdef EMU_C68K
+	// ....
+#endif
 
 #ifdef EMU_A68K
 	if (nSekCPUType[nSekActive] == 0) {
@@ -1062,12 +1196,6 @@ void SekClose()
 #endif
 
 	nSekCycles[nSekActive] = nSekCyclesTotal;
-}
-
-// Get the current CPU
-int SekGetActive()
-{
-	return nSekActive;
 }
 
 // Set the status of an IRQ line on the active CPU
@@ -1092,6 +1220,14 @@ void SekSetIRQLine(const int line, const int status)
 			m68k_set_irq(line);
 #endif
 
+#ifdef EMU_C68K
+			//m68k_set_irq(line);
+			SekC68KCurrentContext->IRQState = 1;	//ASSERT_LINE
+			SekC68KCurrentContext->IRQLine = line;
+			SekC68KCurrentContext->HaltState = 0;
+#endif
+
+
 #ifdef EMU_A68K
 		}
 #endif
@@ -1109,6 +1245,11 @@ void SekSetIRQLine(const int line, const int status)
 
 #ifdef EMU_M68K
 		m68k_set_irq(0);
+#endif
+
+#ifdef EMU_C68K
+		SekC68KCurrentContext->IRQState = 0;	//CLEAR_LINE
+		SekC68KCurrentContext->IRQLine = 0;
 #endif
 
 #ifdef EMU_A68K
@@ -1138,6 +1279,12 @@ void SekRunAdjust(const int nCycles)
 		m68k_modify_timeslice(nCycles);
 #endif
 
+#ifdef EMU_C68K
+		nSekCyclesToDo += nCycles;
+		m68k_ICount += nCycles;
+		nSekCyclesSegment += nCycles;
+#endif
+
 #ifdef EMU_A68K
 	}
 #endif
@@ -1159,6 +1306,13 @@ void SekRunEnd()
 
 #ifdef EMU_M68K
 		m68k_end_timeslice();
+#endif
+
+#ifdef EMU_C68K
+		nSekCyclesTotal += (nSekCyclesToDo - nSekCyclesDone) - m68k_ICount;
+		nSekCyclesDone += (nSekCyclesToDo - nSekCyclesDone) - m68k_ICount;
+		nSekCyclesSegment = nSekCyclesDone;
+		nSekCyclesToDo = m68k_ICount = -1;
 #endif
 
 #ifdef EMU_A68K
@@ -1206,7 +1360,19 @@ int SekRun(const int nCycles)
 
 		return nSekCyclesSegment;
 #else
+
+#ifdef EMU_C68K
+
+		nSekCyclesToDo = nCycles;
+		nSekCyclesSegment = C68k_Exec(SekC68KCurrentContext, nCycles);
+		nSekCyclesTotal += nSekCyclesSegment;
+		nSekCyclesToDo = m68k_ICount = -1;
+
+		return nSekCyclesSegment;
+#else
 		return 0;
+#endif
+
 #endif
 
 #ifdef EMU_A68K
@@ -1528,6 +1694,10 @@ int SekSetWriteLongHandler(int i, pSekWriteLongHandler pHandler)
 
 int SekGetPC(int n)
 {
+	
+#ifdef EMU_C68K
+	return SekC68KCurrentContext->PC - SekC68KCurrentContext->BasePC;
+#endif
 
 #ifdef EMU_A68K
 	if (nSekCPUType[nSekActive] == 0) {
@@ -1553,6 +1723,7 @@ int SekGetPC(int n)
 
 int SekDbgGetCPUType()
 {
+#if 0
 	switch (nSekCPUType[nSekActive]) {
 		case 0:
 		case 0x68000:
@@ -1562,7 +1733,7 @@ int SekDbgGetCPUType()
 		case 0x68EC020:
 			return M68K_CPU_TYPE_68EC020;
 	}
-
+#endif
 	return 0;
 }
 
@@ -1573,6 +1744,7 @@ int SekDbgGetPendingIRQ()
 
 unsigned int SekDbgGetRegister(SekRegister nRegister)
 {
+#if 0
 	if (nSekCPUType[nSekActive] == 0) {
 		switch (nRegister) {
 			case SEK_REG_D0:
@@ -1693,10 +1865,14 @@ unsigned int SekDbgGetRegister(SekRegister nRegister)
 		default:
 			return 0;
 	}
+#else
+	return 0;
+#endif
 }
 
 bool SekDbgSetRegister(SekRegister nRegister, unsigned int nValue)
 {
+#if 0
 	switch (nRegister) {
 		case SEK_REG_D0:
 		case SEK_REG_D1:
@@ -1751,8 +1927,9 @@ bool SekDbgSetRegister(SekRegister nRegister, unsigned int nValue)
 		default:
 			break;
 	}
-
+#else
 	return false;
+#endif
 }
 
 // ----------------------------------------------------------------------------
@@ -1833,7 +2010,12 @@ int SekScan(int nAction)
 #ifdef EMU_A68K
 		}
 #endif
-
+#ifdef EMU_C68K
+				ba.Data = SekC68KContext[i];
+				ba.nLen = (unsigned int)&(SekC68KContext[i]->Rebase_PC) - (unsigned int)SekC68KContext[i];
+				ba.szName = szName;
+				BurnAcb(&ba);
+#endif
 	}
 
 	return 0;

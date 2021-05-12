@@ -5,8 +5,10 @@
  #define __fastcall
 #endif
 
-#define EMU_A68K								// Use A68K Assembler 68000 emulator
-#define EMU_M68K								// Use Musashi 68000 emulator
+#ifndef EMU_M68K
+ #define EMU_C68K
+ #include "c68k.h"
+#endif
 
 #define SEK_MAX	(4)								// Maximum number of CPUs supported
 
@@ -51,14 +53,20 @@
 
  extern "C" unsigned char* OP_ROM;
  extern "C" unsigned char* OP_RAM;
- extern "C" int m68k_ICount;
+
 
  void __fastcall AsekChangePc(unsigned int pc);
 #endif
-
+ extern "C" int m68k_ICount;
 #ifdef EMU_M68K
  extern "C" int nSekM68KContextSize[SEK_MAX];
  extern "C" char* SekM68KContext[SEK_MAX];
+#endif
+
+#ifdef EMU_C68K
+ extern "C" c68k_struc * SekC68KCurrentContext;
+ extern "C" c68k_struc * SekC68KContext[SEK_MAX]; 
+ #define m68k_ICount	(SekC68KCurrentContext->ICount)
 #endif
 
 typedef unsigned char (__fastcall *pSekReadByteHandler)(unsigned int a);

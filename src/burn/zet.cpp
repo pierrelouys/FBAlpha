@@ -1,6 +1,10 @@
 // Z80 (Zed Eight-Ty) Interface
 #include "burnint.h"
 
+#ifdef EMU_CZ80
+ #include "cz80.c"
+#endif
+
 #ifdef EMU_DOZE
  static DozeContext * ZetCPUContext = NULL;
 #endif // EMU_DOZE
@@ -335,7 +339,7 @@ int ZetGetActive()
 }
 int ZetRun(int nCycles)
 {
-	if (nCycles <= 0) return 0;
+	if (nCycles <= 0||ZetCPUContext==0) return 0;
 	
 #ifdef EMU_DOZE
 	Doze.nCyclesTotal += nCycles;
@@ -763,7 +767,6 @@ int ZetBc(int n)
 #endif
 
 }
-
 int ZetDe(int n)
 {
 #ifdef EMU_DOZE
@@ -792,7 +795,6 @@ int ZetDe(int n)
 	}
 #endif
 }
-
 int ZetHL(int n)
 {
 #ifdef EMU_DOZE
@@ -833,6 +835,15 @@ int ZetScan(int nAction)
 		szText[5] = '1' + i;
 
 		ScanVar(&ZetCPUContext[i], 32 + 16, szText);
+	}
+#endif
+#ifdef EMU_CZ80
+	char szText[] = "Z80 #0";
+
+	for (int i = 0; i < nCPUCount; i++) {
+		szText[5] = '1' + i;
+
+		ScanVar(&ZetCPUContext[i], (unsigned int)&(ZetCPUContext[i].Fetch)-(unsigned int)&ZetCPUContext[i], szText);
 	}
 #endif
 
