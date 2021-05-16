@@ -1,7 +1,7 @@
 ### Compiling
 
 ```
-make init -f makefile.small
+make small
 ```
 
-Where `makefile.small` is the name of the makefile for the specific build.
+Where `small` is the name of the specific build.
