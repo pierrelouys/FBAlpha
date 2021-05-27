@@ -7,6 +7,7 @@
 #include <string.h>
 #include <pspdisplay.h>
 #include <png.h>
+#include <unistd.h>
 
 #include "psp.h"
 #include "font.h"
@@ -17,6 +18,8 @@
 
 
 #define find_rom_list_cnt	10
+#define png_infopp_NULL (png_infopp)NULL
+#define int_p_NULL (int*)NULL
 
 short gameSpeedCtrl = 1;
 unsigned int hotButtons = (PSP_CTRL_SQUARE|PSP_CTRL_CIRCLE|PSP_CTRL_CROSS);
@@ -264,8 +267,7 @@ void draw_ui_main()
 	char buf[320];
 	if(bgIndex!=1)
 	{
-		//if(access("bg1.png",0)==0)
-		if (true)
+		if(access("bg1.png",0)==0)
 		{
 			loadImage(bgBuf,"bg1.png", &bgW, &bgH);
 			bgIndex=1;				
@@ -374,8 +376,7 @@ void draw_ui_main()
 		sprintf(buf+300,"_%1u.png",saveIndex);	
 		strcat(buf,buf+300);
 		
-		//if(access(buf,0)==0)
-		if (true)
+		if(access(buf,0)==0)
 		{
 			unsigned int imgW,imgH;
 			loadImage(previewBuf,buf, &imgW, &imgH);
@@ -392,8 +393,7 @@ void draw_ui_browse(bool rebuiltlist)
 	char buf[1024];
 	if(bgIndex!=2)
 	{
-		//if(access("bg2.png",0)==0)
-		if(true)
+		if(access("bg2.png",0)==0)
 		{
 			loadImage(bgBuf,"bg2.png", &bgW, &bgH);
 			bgIndex=2;				
@@ -473,8 +473,7 @@ void draw_ui_browse(bool rebuiltlist)
 		strcat(buf,BurnDrvGetTextA(DRV_NAME));
 		strcat(buf,".png");
 		int i=-1;
-		//if(access(buf,0)!=0)
-		if(true)
+		if(access(buf,0)!=0)
 		{
 			for(i=0;i<10;i++)
 			{
@@ -482,8 +481,7 @@ void draw_ui_browse(bool rebuiltlist)
 				strcat(buf,BurnDrvGetTextA(DRV_NAME));
 				sprintf(buf+512,"_%1u.png",i);	
 				strcat(buf,buf+512);
-				//if(access(buf,0)==0)
-				if(true)
+				if(access(buf,0)==0)
 					break;
 			}
 		}
