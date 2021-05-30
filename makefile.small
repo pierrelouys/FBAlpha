@@ -288,6 +288,7 @@ burn.o burn.d:	driverlist.h
 
 $(driverlist.h): $(drvobj) $(srcdir)scripts/gamelist.pl
 ifdef	PERL
+	@chmod +x $(srcdir)scripts/*
 	@$(srcdir)scripts/gamelist.pl -o $@ -l ${BINDIR}/gamelist.txt \
 		$(filter %.cpp,$(foreach file,$(drvobj:.o=.cpp),$(foreach dir,$(alldir), \
 		$(firstword $(wildcard $(srcdir)$(dir)/$(file))))))
