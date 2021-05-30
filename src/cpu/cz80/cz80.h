@@ -216,7 +216,7 @@ typedef struct cz80_t
 /*************************/
 /* Publics Z80 functions */
 /*************************/
-/*
+
 void Cz80_InitFlags();
 
 void Cz80_Init(cz80_struc*);
@@ -234,8 +234,8 @@ unsigned int Cz80_Get_DE(cz80_struc*);
 unsigned int Cz80_Get_HL(cz80_struc*);
 
 unsigned int Cz80_Get_PC(cz80_struc*);
-*/
 
+void Cz80_Set_PC(cz80_struc *CPU, UINT32 val);
 
 #ifdef __cplusplus
 };
